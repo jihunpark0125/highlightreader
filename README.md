@@ -21,7 +21,7 @@ PDF를 올리면 **원문은 그대로 두고** 핵심 문장과 핵심 그림·
 2. `web/.env.local.example`을 복사해 `web/.env.local`로 저장합니다(값은 이미 채워져 있음).
 3. 패키지 설치
    ```
-   pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    cd web && npm install
    ```
 
@@ -72,6 +72,28 @@ select h.*, d.title, d.finalized_at from highlights h join documents d on d.id =
 python -m api.eval_report rows.json --finalized-only
 ```
 정밀도·재현율, 유형별·관련도 구간별 해제율이 나옵니다. 기준(지시문·비율)을 바꾸기 전후로 비교하는 데 씁니다.
+
+## 온라인 배포 (Vercel + Render)
+화면(web/)은 Vercel, AI 서버(api/)는 Render에 올립니다. 둘 다 이 GitHub 저장소에 push하면 자동으로 다시 배포됩니다.
+
+1. **Render (AI 서버)** — render.com에 GitHub로 로그인 → New → **Blueprint** → 이 저장소 선택 (`render.yaml`을 읽음)
+   - 입력 창: `OPENAI_API_KEY` = OpenAI 키, `WEB_ORIGINS` = 일단 `http://localhost:3000`
+   - 배포가 끝나면 주소(예: `https://luma-api-xxxx.onrender.com`)의 `/health`가 `{"ok":true}`인지 확인
+   - 무료 플랜은 15분 동안 요청이 없으면 잠들어 첫 분석이 30~60초 늦습니다. 항상 켜려면 Starter($7/월).
+2. **Vercel (화면)** — vercel.com에 GitHub로 로그인 → Add New → Project → 이 저장소 Import
+   - **Root Directory: `web`**
+   - Environment Variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_KEY` (`web/.env.local.example` 값),
+     `NEXT_PUBLIC_API_URL` = 1번의 Render 주소
+3. **Render**로 돌아가 `WEB_ORIGINS`를 Vercel 주소(예: `https://luma-reader.vercel.app`)로 바꿈 → 자동 재배포
+4. **Supabase** 대시보드 → Authentication → URL Configuration
+   - Site URL = Vercel 주소, Redirect URLs에 `Vercel 주소/**` 추가 (가입 확인 메일 링크가 여기로 돌아옴)
+
+### 사람 초대하기
+가입은 `allowed_emails`에 있는 이메일만 됩니다. Supabase SQL 편집기에서:
+```
+insert into public.allowed_emails (email, note) values ('friend@example.com', '친구');
+```
+초대 취소는 `delete from public.allowed_emails where email = '...';` (이미 가입한 계정은 Authentication → Users에서 삭제)
 
 ## 알려진 한계 (MVP)
 - 스캔본(글자가 이미지인) PDF는 지원하지 않습니다.
