@@ -2,6 +2,7 @@
 
 import { Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useDialog } from "@/components/DialogProvider";
 import { deleteDocument, moveDocument } from "@/lib/library";
 import type { DocumentRow, ProjectRow } from "@/lib/types";
 
@@ -20,6 +21,7 @@ type Props = {
 };
 
 export default function DocumentList({ docs, projects, empty, onChanged }: Props) {
+  const dialog = useDialog();
   if (docs.length === 0) return <p className="form-note">{empty}</p>;
 
   async function move(doc: DocumentRow, projectId: string) {
@@ -27,17 +29,23 @@ export default function DocumentList({ docs, projects, empty, onChanged }: Props
       await moveDocument(doc.id, projectId || null);
       onChanged();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      dialog.notify("옮기지 못했어요", e instanceof Error ? e.message : String(e));
     }
   }
 
   async function remove(doc: DocumentRow) {
-    if (!confirm(`"${doc.title}" 문서와 하이라이트·코멘트를 삭제할까요? 되돌릴 수 없어요.`)) return;
+    const ok = await dialog.confirm({
+      title: "문서를 삭제할까요?",
+      message: `"${doc.title.replace(/\.pdf$/i, "")}"와 하이라이트·코멘트가 모두 지워지고 되돌릴 수 없어요.`,
+      confirmLabel: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deleteDocument(doc);
       onChanged();
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      dialog.notify("삭제하지 못했어요", e instanceof Error ? e.message : String(e));
     }
   }
 

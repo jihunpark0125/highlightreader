@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import { Brand } from "@/components/Brand";
+import { useDialog } from "@/components/DialogProvider";
 import { downloadHighlighted, startProcessing } from "@/lib/api";
 import type { OcrResult } from "@/lib/ocr";
 import "@/lib/pdfjs";
@@ -61,6 +62,7 @@ export default function Workspace({ doc, file, initialRows, initialComments, ocr
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const dialog = useDialog();
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const finalized = !!doc.finalized_at;
@@ -195,13 +197,13 @@ export default function Workspace({ doc, file, initialRows, initialComments, ocr
   }, [comments, persist]);
 
   const deleteComment = useCallback(async (id: string) => {
-    if (!confirm("이 코멘트를 삭제할까요?")) return;
+    if (!(await dialog.confirm({ title: "이 코멘트를 삭제할까요?", confirmLabel: "삭제", danger: true }))) return;
     const before = comments;
     setComments((prev) => prev.filter((c) => c.id !== id));
     setOpenComment(null);
     const ok = await persist(() => supabase.from("comments").delete().eq("id", id), "코멘트를 삭제하지 못했어요.");
     if (!ok) setComments(before);
-  }, [comments, persist]);
+  }, [comments, persist, dialog]);
 
   // ── 이전/다음 하이라이트 이동 ──
   /** 하이라이트 첫 줄의 캔버스 안 세로 위치 */
@@ -260,7 +262,7 @@ export default function Workspace({ doc, file, initialRows, initialComments, ocr
   }
 
   async function unfinalize() {
-    if (!confirm("확정을 풀고 다시 수정할까요?")) return;
+    if (!(await dialog.confirm({ title: "확정을 풀고 다시 수정할까요?", message: "프로젝트와 핵심 한 문장은 그대로 남아요.", confirmLabel: "다시 수정" }))) return;
     const ok = await persist(() => supabase.from("documents").update({ finalized_at: null }).eq("id", doc.id), "상태를 바꾸지 못했어요.");
     if (ok) onDocChange({ ...doc, finalized_at: null });
   }
@@ -296,7 +298,12 @@ export default function Workspace({ doc, file, initialRows, initialComments, ocr
 
   async function regenerate() {
     setMenuOpen(false);
-    if (!confirm("AI 하이라이트를 처음부터 다시 만들까요?\n직접 추가한 하이라이트는 그대로 남고, AI 하이라이트를 해제한 기록은 사라져요.")) return;
+    const ok = await dialog.confirm({
+      title: "AI 하이라이트를 처음부터 다시 만들까요?",
+      message: "직접 추가한 하이라이트는 그대로 남고, AI 하이라이트를 해제한 기록은 사라져요.",
+      confirmLabel: "다시 만들기",
+    });
+    if (!ok) return;
     try {
       await startProcessing(doc.id);
       onDocChange({ ...doc, status: "processing", progress: 0 });

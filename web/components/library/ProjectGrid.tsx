@@ -3,6 +3,7 @@
 import { FolderOpen, FolderPlus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { useDialog } from "@/components/DialogProvider";
 import { createProject } from "@/lib/library";
 import type { DocumentRow, ProjectRow } from "@/lib/types";
 
@@ -16,6 +17,7 @@ export default function ProjectGrid({ projects, docs, onCreated }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const dialog = useDialog();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,7 +29,7 @@ export default function ProjectGrid({ projects, docs, onCreated }: Props) {
       setAdding(false);
       onCreated();
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      dialog.notify("프로젝트를 만들지 못했어요", err instanceof Error ? err.message : String(err));
     }
     setBusy(false);
   }

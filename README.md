@@ -1,7 +1,7 @@
-# Luma (easy_read)
+# Rewiter 리위터 (easy_read)
 
 PDF를 올리면 **원문은 그대로 두고** 핵심 문장과 핵심 그림·표에만 형광펜을 칩니다.
-화면은 Figma Make 디자인 "AI Highlighting PDF Reader"를 따릅니다 (브랜드명은 `web/components/Brand.tsx` 한 곳에서 바꿀 수 있음).
+화면은 Figma Make 디자인 "AI Highlighting PDF Reader"를 따릅니다 (로고는 "readwithhighlighter"에서 r·e·w·i·t·e·r에만 하이라이트를 칠해 "Rewiter"로 읽히게 함 — `web/components/Brand.tsx`).
 읽으면서 하이라이트를 더하거나 지운 뒤 최종 확정하면, 하이라이트가 들어간 PDF를 내려받을 수 있습니다.
 
 ## 원문을 바꾸지 않는 방법

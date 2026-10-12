@@ -351,3 +351,18 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   font-family: sans-serif;
 }
 .ocr-layer span::selection { background: rgba(94, 120, 105, .3); }
+
+/* 로고: readwithhighlighter 중 rewiter 에만 형광펜 */
+.brand-word { font-family: var(--serif); font-size: 17px; font-weight: 600; letter-spacing: -0.2px; color: var(--ink-faint); }
+.brand-word mark {
+  color: var(--ink); background: linear-gradient(transparent 12%, var(--amber) 12% 90%, transparent 90%);
+  border-radius: 1px;
+}
+
+/* 앱 안 확인 대화상자 (브라우저 기본 confirm 대신) */
+.modal.dialog { width: min(420px, 100%); }
+.dialog-body { padding: 20px 22px 6px; }
+.dialog-body h3 { margin: 0 0 8px; font-family: var(--serif); font-size: 17px; font-weight: 600; word-break: keep-all; }
+.dialog-body p { margin: 0 0 8px; color: var(--ink-soft); font-size: 13px; line-height: 1.7; word-break: keep-all; }
+.primary-button.danger { background: #a33a2b; border-color: #a33a2b; }
+.primary-button.danger:hover { background: #8c3123; }

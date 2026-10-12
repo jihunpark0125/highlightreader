@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
+import { useDialog } from "@/components/DialogProvider";
 import DocumentList from "@/components/library/DocumentList";
 import UploadBox from "@/components/library/UploadBox";
 import { SimpleTopbar } from "@/components/SimpleTopbar";
@@ -18,6 +19,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const { projects, docs, reload } = useLibrary(!!session);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
+  const dialog = useDialog();
 
   if (!session || !projects || !docs) return null;
   const project = projects.find((p) => p.id === id);
@@ -38,15 +40,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     e.preventDefault();
     if (!name.trim()) return;
     const { error } = await supabase.from("projects").update({ name: name.trim() }).eq("id", id);
-    if (error) return alert("이름을 바꾸지 못했어요.");
+    if (error) return dialog.notify("이름을 바꾸지 못했어요");
     setRenaming(false);
     reload();
   }
 
   async function remove() {
-    if (!confirm(`"${project!.name}" 프로젝트를 삭제할까요?\n안에 있던 문서는 지워지지 않고 '분류 안 된 문서'로 옮겨져요.`)) return;
+    const ok = await dialog.confirm({
+      title: `"${project!.name}" 프로젝트를 삭제할까요?`,
+      message: "안에 있던 문서는 지워지지 않고 '분류 안 된 문서'로 옮겨져요.",
+      confirmLabel: "삭제",
+      danger: true,
+    });
+    if (!ok) return;
     const { error } = await supabase.from("projects").delete().eq("id", id);
-    if (error) return alert("프로젝트를 삭제하지 못했어요.");
+    if (error) return dialog.notify("프로젝트를 삭제하지 못했어요");
     router.replace("/");
   }
 

@@ -13,7 +13,7 @@ import fitz  # PyMuPDF
 from .models import Comment, Highlight
 
 AMBER = (0.949, 0.847, 0.475)  # #f2d879 — 화면 하이라이트와 같은 색
-ANNOT_TITLE = "Luma"
+ANNOT_TITLE = "Rewiter"
 
 
 def _add_comments(doc: fitz.Document, comments: list[Comment]) -> None:

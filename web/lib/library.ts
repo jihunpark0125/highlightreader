@@ -37,7 +37,10 @@ export async function moveDocument(docId: string, projectId: string | null): Pro
 }
 
 export async function deleteDocument(doc: DocumentRow): Promise<void> {
+  // 하이라이트·코멘트는 DB에서 함께 지워진다 (on delete cascade)
+  const { data, error } = await supabase.from("documents").delete().eq("id", doc.id).select("id");
+  if (error || !data?.length) throw new Error("문서를 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.");
+  // 파일은 문서가 지워진 뒤 정리한다 (실패해도 목록에서는 이미 사라졌으므로 무시)
   await supabase.storage.from(BUCKET).remove([doc.storage_path]);
-  const { error } = await supabase.from("documents").delete().eq("id", doc.id);
-  if (error) throw new Error("문서를 삭제하지 못했어요.");
+  await supabase.storage.from("ocr").remove([`${doc.user_id}/${doc.id}.json`]);
 }
