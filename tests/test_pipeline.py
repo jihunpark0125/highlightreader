@@ -2,7 +2,7 @@ import fitz
 
 from api.export import export_pdf
 from api.extract import extract
-from api.models import Highlight
+from api.models import Comment, Highlight
 from api.selector import select_highlights
 from tests.samples import make_english_paper, make_korean_doc, make_korean_two_column_lines
 
@@ -84,3 +84,19 @@ def test_korean_lines_join_across_lines_and_columns():
     assert any(t.startswith("대부분의 선행 연구들은") and t.endswith("부족한 실정이다.") for t in texts)
     assert any(t.startswith("따라서 본 연구는") and t.endswith("목적이 있다.") for t in texts)  # 다음 단으로 이어짐
     assert not any("김지현" in t for t in texts)
+
+
+def test_export_with_comments_keeps_original_and_adds_notes():
+    original = make_english_paper()
+    highlights = select_highlights(extract(original), offline=True)
+    comments = [Comment(page=0, x=520, y=120, body="이 문장 다시 읽기"), Comment(page=1, x=5000, y=-3, body="범위 밖 좌표")]
+    exported = export_pdf(original, highlights, comments)
+    assert exported.startswith(original)
+    pdf = fitz.open(stream=exported)
+    notes = []
+    for page in pdf:
+        for a in page.annots():
+            if a.type[1] == "Text":
+                notes.append((a.info["content"], page.rect.contains(a.rect.tl)))
+    assert [n[0] for n in notes] == ["이 문장 다시 읽기", "범위 밖 좌표"]
+    assert all(inside for _text, inside in notes)  # 범위 밖 좌표는 쪽 안으로 옮겨짐

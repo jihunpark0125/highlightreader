@@ -11,6 +11,27 @@ export type DocumentRow = {
   progress: number;
   error: string | null;
   finalized_at: string | null;
+  project_id: string | null;
+  key_sentence: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+};
+
+/** 쪽 위에 꽂는 코멘트 핀 */
+export type CommentRow = {
+  id: string;
+  document_id: string;
+  page: number; // 0부터 시작
+  x: number; // PDF 포인트, 좌상단 원점
+  y: number;
+  body: string;
   created_at: string;
   updated_at: string;
 };

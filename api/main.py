@@ -21,7 +21,7 @@ from fastapi.responses import Response
 from .config import load_dotenv
 from .export import export_pdf
 from .extract import extract
-from .models import Highlight
+from .models import Comment, Highlight
 from .selector import DEFAULT_RATIO, select_highlights
 from .supabase_client import SupabaseError, UserSupabase
 
@@ -123,7 +123,8 @@ def export_document(doc_id: str, client: UserSupabase = Depends(user_client)) ->
     doc = _owned_document(client, doc_id)
     original = client.download(BUCKET, doc["storage_path"])
     highlights = [Highlight.from_dict(row) for row in client.list_highlights(doc_id)]
-    data = export_pdf(original, highlights)
+    comments = [Comment.from_dict(row) for row in client.list_comments(doc_id)]
+    data = export_pdf(original, highlights, comments)
     title = doc["title"].removesuffix(".pdf")
     filename = quote(f"{title}_highlighted.pdf")
     return Response(

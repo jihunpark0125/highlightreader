@@ -5,7 +5,7 @@ import { Page } from "react-pdf";
 import type { HighlightGroup, HighlightRow, Rect } from "@/lib/types";
 
 export type NewHighlight = Pick<HighlightRow, "page" | "kind" | "rects" | "text">;
-export type EditMode = "off" | "text" | "area";
+export type EditMode = "off" | "text" | "area" | "comment";
 
 type Props = {
   numPages: number;
@@ -20,6 +20,9 @@ type Props = {
   onSelect: (key: string | null) => void;
   onAdd: (items: NewHighlight[]) => void;
   onDeactivate: (key: string) => void;
+  onPlaceComment: (page: number, x: number, y: number) => void;
+  /** 쪽마다 덧붙여 그릴 것 (코멘트 핀) — 화면 배율이 반영된 좌표로 그려야 한다 */
+  renderPageExtras: (page: number) => React.ReactNode;
 };
 
 /** 화면 좌표 사각형들을 PDF 좌표로 바꾸고, 같은 줄에 붙어 있는 조각은 하나로 합친다. */
@@ -53,7 +56,7 @@ function toLineRects(client: DOMRect[], page: DOMRect, scale: number): Rect[] {
 }
 
 export default function ReaderPages(props: Props) {
-  const { numPages, sizeOf, zoom, groups, selectedKey, mode, editable, pageRefs, scrollRoot, onSelect, onAdd, onDeactivate } = props;
+  const { numPages, sizeOf, zoom, groups, selectedKey, mode, editable, pageRefs, scrollRoot, onSelect, onAdd, onDeactivate, onPlaceComment, renderPageExtras } = props;
   const [visible, setVisible] = useState<Set<number>>(new Set([0, 1, 2]));
   const [draft, setDraft] = useState<{ page: number; start: [number, number]; end: [number, number] } | null>(null);
   const draftRef = useRef(draft);
@@ -90,8 +93,16 @@ export default function ReaderPages(props: Props) {
   }, [groups]);
 
   function handleMouseUp(e: React.MouseEvent) {
-    if ((e.target as HTMLElement).closest("[data-popover]")) return;
+    if ((e.target as HTMLElement).closest("[data-popover], [data-comment]")) return;
     const selection = window.getSelection();
+
+    if (editable && mode === "comment") {
+      const pageEl = (e.target as HTMLElement).closest<HTMLElement>("[data-page]");
+      if (!pageEl) return;
+      const box = pageEl.getBoundingClientRect();
+      onPlaceComment(Number(pageEl.dataset.page), (e.clientX - box.left) / zoom, (e.clientY - box.top) / zoom);
+      return;
+    }
 
     if (editable && mode === "text" && selection && !selection.isCollapsed && selection.rangeCount) {
       const clientRects = Array.from(selection.getRangeAt(0).getClientRects());
@@ -209,6 +220,7 @@ export default function ReaderPages(props: Props) {
               </div>
             )}
 
+            {renderPageExtras(page)}
             <span className="pdf-page-number">{page + 1}</span>
           </div>
         );

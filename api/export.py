@@ -10,10 +10,24 @@ import tempfile
 
 import fitz  # PyMuPDF
 
-from .models import Highlight
+from .models import Comment, Highlight
 
 AMBER = (0.949, 0.847, 0.475)  # #f2d879 — 화면 하이라이트와 같은 색
-ANNOT_TITLE = "HighlightReader"
+ANNOT_TITLE = "Luma"
+
+
+def _add_comments(doc: fitz.Document, comments: list[Comment]) -> None:
+    """사용자 코멘트는 PDF 표준 메모(말풍선) 주석으로 넣는다."""
+    for c in comments:
+        if not 0 <= c.page < doc.page_count or not c.body.strip():
+            continue
+        page = doc[c.page]
+        x = min(max(c.x, 0), page.rect.width - 20)
+        y = min(max(c.y, 0), page.rect.height - 20)
+        annot = page.add_text_annot((x, y), c.body, icon="Comment")
+        annot.set_colors(stroke=AMBER)
+        annot.set_info(title=ANNOT_TITLE)
+        annot.update()
 
 
 def _add_annotations(doc: fitz.Document, highlights: list[Highlight]) -> None:
@@ -36,7 +50,7 @@ def _add_annotations(doc: fitz.Document, highlights: list[Highlight]) -> None:
             annot.update()
 
 
-def export_pdf(original: bytes, highlights: list[Highlight]) -> bytes:
+def export_pdf(original: bytes, highlights: list[Highlight], comments: list[Comment] | None = None) -> bytes:
     fd, path = tempfile.mkstemp(suffix=".pdf")
     try:
         with os.fdopen(fd, "wb") as f:
@@ -44,6 +58,7 @@ def export_pdf(original: bytes, highlights: list[Highlight]) -> bytes:
         doc = fitz.open(path)
         try:
             _add_annotations(doc, highlights)
+            _add_comments(doc, comments or [])
             if not doc.can_save_incrementally():
                 # 손상되었거나 암호화된 PDF는 증분 저장이 불가능해 전체를 다시 쓴다(내용은 동일).
                 return doc.tobytes(garbage=0, deflate=False)

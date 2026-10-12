@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Expand, Highlighter, MoreHorizontal, PanelLeftOpen,
-  Shrink, SquareDashed, Undo2, ZoomIn, ZoomOut,
+  ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Expand, Highlighter, MessageSquarePlus, MoreHorizontal,
+  PanelLeftOpen, Shrink, SquareDashed, Undo2, ZoomIn, ZoomOut,
 } from "lucide-react";
 import Link from "next/link";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -12,7 +12,9 @@ import "react-pdf/dist/Page/TextLayer.css";
 import { Brand } from "@/components/Brand";
 import { downloadHighlighted, startProcessing } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-import { groupHighlights, type DocumentRow, type HighlightGroup, type HighlightRow } from "@/lib/types";
+import { groupHighlights, type CommentRow, type DocumentRow, type HighlightGroup, type HighlightRow, type ProjectRow } from "@/lib/types";
+import CommentPin from "./CommentPin";
+import FinalizeDialog, { type FinalizeChoice } from "./FinalizeDialog";
 import PageRail from "./PageRail";
 import ReaderPages, { type EditMode, type NewHighlight } from "./ReaderPages";
 
@@ -31,10 +33,11 @@ type Props = {
   doc: DocumentRow;
   file: Blob;
   initialRows: HighlightRow[];
+  initialComments: CommentRow[];
   onDocChange: (doc: DocumentRow) => void;
 };
 
-export default function Workspace({ doc, file, initialRows, onDocChange }: Props) {
+export default function Workspace({ doc, file, initialRows, initialComments, onDocChange }: Props) {
   const [rows, setRows] = useState<HighlightRow[]>(initialRows);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -51,6 +54,11 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
   const [hint, setHint] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [comments, setComments] = useState<CommentRow[]>(initialComments);
+  const [openComment, setOpenComment] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ page: number; x: number; y: number } | null>(null);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -64,6 +72,10 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
     [doc.page_sizes, firstSize],
   );
   const effectiveZoom = zoom ?? fitZoom;
+
+  useEffect(() => {
+    supabase.from("projects").select("*").order("created_at").then(({ data }) => setProjects((data as ProjectRow[]) ?? []));
+  }, []);
 
   // 화면 너비에 맞춘 배율
   useEffect(() => {
@@ -154,6 +166,42 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
     }
   }, [undoStack, editable, persist]);
 
+  // ── 코멘트 핀 ──
+  const placeComment = useCallback((page: number, x: number, y: number) => {
+    setOpenComment(null);
+    setDraft({ page, x, y });
+  }, []);
+
+  const saveDraft = useCallback(async (body: string) => {
+    if (!draft) return;
+    setSaving((n) => n + 1);
+    const { data, error } = await supabase.from("comments").insert({ ...draft, body, document_id: doc.id }).select().single();
+    setSaving((n) => n - 1);
+    if (error || !data) return showToast({ text: "코멘트를 저장하지 못했어요.", error: true });
+    setComments((prev) => [...prev, data as CommentRow]);
+    setDraft(null);
+    setOpenComment((data as CommentRow).id);
+  }, [draft, doc.id, showToast]);
+
+  const updateComment = useCallback(async (id: string, body: string) => {
+    const before = comments.find((c) => c.id === id);
+    setComments((prev) => prev.map((c) => (c.id === id ? { ...c, body } : c)));
+    const ok = await persist(
+      () => supabase.from("comments").update({ body, updated_at: new Date().toISOString() }).eq("id", id),
+      "코멘트를 수정하지 못했어요.",
+    );
+    if (!ok && before) setComments((prev) => prev.map((c) => (c.id === id ? before : c)));
+  }, [comments, persist]);
+
+  const deleteComment = useCallback(async (id: string) => {
+    if (!confirm("이 코멘트를 삭제할까요?")) return;
+    const before = comments;
+    setComments((prev) => prev.filter((c) => c.id !== id));
+    setOpenComment(null);
+    const ok = await persist(() => supabase.from("comments").delete().eq("id", id), "코멘트를 삭제하지 못했어요.");
+    if (!ok) setComments(before);
+  }, [comments, persist]);
+
   // ── 이전/다음 하이라이트 이동 ──
   /** 하이라이트 첫 줄의 캔버스 안 세로 위치 */
   const offsetOf = useCallback((g: HighlightGroup) => {
@@ -195,7 +243,7 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
       }
       if (e.key === "ArrowRight") { e.preventDefault(); goTo(1); }
       if (e.key === "ArrowLeft") { e.preventDefault(); goTo(-1); }
-      if (e.key === "Escape") { setSelectedKey(null); setMode("off"); }
+      if (e.key === "Escape") { setSelectedKey(null); setMode("off"); setDraft(null); setOpenComment(null); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -206,38 +254,44 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
     setMode(value);
     if (value === "text") setHint("문장을 드래그하면 하이라이트가 추가돼요");
     if (value === "area") setHint("그림이나 표 주위를 드래그해 영역을 표시하세요");
+    if (value === "comment") setHint("쪽 아무 곳이나 누르면 그 자리에 코멘트가 꽂혀요");
+    if (value !== "comment") setDraft(null);
   }
 
-  async function setFinalized(final: boolean) {
-    const finalized_at = final ? new Date().toISOString() : null;
-    const ok = await persist(() => supabase.from("documents").update({ finalized_at }).eq("id", doc.id), "상태를 바꾸지 못했어요.");
-    if (!ok) return false;
-    onDocChange({ ...doc, finalized_at });
-    setMode("off");
-    setSelectedKey(null);
-    return true;
+  async function unfinalize() {
+    if (!confirm("확정을 풀고 다시 수정할까요?")) return;
+    const ok = await persist(() => supabase.from("documents").update({ finalized_at: null }).eq("id", doc.id), "상태를 바꾸지 못했어요.");
+    if (ok) onDocChange({ ...doc, finalized_at: null });
   }
 
-  async function toggleFinal() {
-    if (finalized) {
-      if (confirm("확정을 풀고 다시 수정할까요?")) await setFinalized(false);
-    } else if (await setFinalized(true)) {
-      showToast({ text: "최종본으로 확정했어요. 이제 PDF로 내보낼 수 있어요." });
-    }
-  }
-
-  async function exportPdf() {
+  async function download() {
     setExporting(true);
     try {
-      if (!finalized && !(await setFinalized(true))) return;
       await downloadHighlighted(doc.id, doc.title.replace(/\.pdf$/i, "") + "_highlighted.pdf");
-      showToast({ text: finalized ? "PDF를 내보냈어요." : "최종본으로 확정하고 PDF를 내보냈어요." });
+      showToast({ text: "PDF를 내보냈어요." });
     } catch (e) {
       showToast({ text: e instanceof Error ? e.message : String(e), error: true });
     } finally {
       setExporting(false);
     }
   }
+
+  /** 확정 창에서 고른 프로젝트·핵심 문장과 함께 확정 */
+  async function confirmFinalize({ projectId, keySentence, download: thenDownload }: FinalizeChoice) {
+    const fields = { finalized_at: new Date().toISOString(), project_id: projectId, key_sentence: keySentence };
+    const { error } = await supabase.from("documents").update(fields).eq("id", doc.id);
+    if (error) throw new Error("확정하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    onDocChange({ ...doc, ...fields });
+    setFinalizeOpen(false);
+    setMode("off");
+    setSelectedKey(null);
+    setDraft(null);
+    if (thenDownload) await download();
+    else showToast({ text: "최종본으로 확정했어요." });
+  }
+
+  const toggleFinal = () => (finalized ? unfinalize() : setFinalizeOpen(true));
+  const exportPdf = () => (finalized ? download() : setFinalizeOpen(true));
 
   async function regenerate() {
     setMenuOpen(false);
@@ -252,6 +306,35 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
 
   const zoomBy = (delta: number) => setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round((effectiveZoom + delta) * 10) / 10)));
   const created = new Date(doc.created_at).toLocaleDateString("ko-KR");
+  const projectName = projects.find((p) => p.id === doc.project_id)?.name;
+
+  const renderPins = (page: number) => (
+    <>
+      {comments.filter((c) => c.page === page).map((c) => (
+        <CommentPin
+          key={c.id}
+          x={c.x * effectiveZoom} y={c.y * effectiveZoom}
+          body={c.body}
+          open={openComment === c.id}
+          editable={editable}
+          onOpen={() => { setDraft(null); setOpenComment(c.id); }}
+          onClose={() => setOpenComment(null)}
+          onSave={(body) => updateComment(c.id, body)}
+          onDelete={() => deleteComment(c.id)}
+        />
+      ))}
+      {draft?.page === page && (
+        <CommentPin
+          key="draft" isDraft open
+          x={draft.x * effectiveZoom} y={draft.y * effectiveZoom}
+          body="" editable
+          onOpen={() => {}}
+          onClose={() => setDraft(null)}
+          onSave={saveDraft}
+        />
+      )}
+    </>
+  );
 
   return (
     <div style={{ height: "100vh", overflow: "hidden" }}>
@@ -264,7 +347,9 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
           <div className="header-divider" />
           <div className="document-title">
             <span>{doc.title.replace(/\.pdf$/i, "")}</span>
-            <span className="document-meta">{numPages || doc.page_count || "-"}쪽 · {created}</span>
+            <span className="document-meta">
+              {projectName ? projectName + " · " : ""}{numPages || doc.page_count || "-"}쪽 · {created}
+            </span>
           </div>
         </div>
         <div className="topbar-actions">
@@ -307,6 +392,7 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
           numPages={numPages}
           sizeOf={sizeOf}
           groups={activeGroups}
+          comments={comments}
           currentPage={currentPage}
           onJump={jumpTo}
           onClose={() => setRailOpen(false)}
@@ -366,6 +452,12 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
               >
                 <SquareDashed size={14} /> 그림 영역
               </button>
+              <button
+                className={`highlight-tool ${mode === "comment" ? "active" : ""}`} disabled={!editable}
+                onClick={() => chooseMode("comment")} title="쪽에 코멘트 핀 꽂기"
+              >
+                <MessageSquarePlus size={14} /> 코멘트
+              </button>
             </div>
           </div>
 
@@ -383,6 +475,8 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
               onSelect={setSelectedKey}
               onAdd={addHighlights}
               onDeactivate={(key) => { const g = groups.find((x) => x.key === key); if (g) setGroupActive(g, false); }}
+              onPlaceComment={placeComment}
+              renderPageExtras={renderPins}
             />
           </div>
         </section>
@@ -396,6 +490,17 @@ export default function Workspace({ doc, file, initialRows, onDocChange }: Props
           {toast.text}
           {toast.undo && <button onClick={undo}>되돌리기</button>}
         </div>
+      )}
+
+      {finalizeOpen && (
+        <FinalizeDialog
+          doc={doc}
+          projects={projects}
+          groups={activeGroups}
+          onProjectCreated={(p) => setProjects((prev) => [...prev, p])}
+          onCancel={() => setFinalizeOpen(false)}
+          onConfirm={confirmFinalize}
+        />
       )}
 
     </div>

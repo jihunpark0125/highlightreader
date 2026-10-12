@@ -92,3 +92,52 @@ revoke all on function private.enforce_invite_only() from public, anon, authenti
 drop trigger if exists enforce_invite_only on auth.users;
 create trigger enforce_invite_only before insert on auth.users
   for each row execute function private.enforce_invite_only();
+
+-- 4차: 프로젝트(폴더) · 핵심 한 문장 · 코멘트 핀
+create table if not exists public.projects (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 60),
+  created_at timestamptz not null default now()
+);
+create index if not exists projects_user_idx on public.projects (user_id, created_at);
+alter table public.projects enable row level security;
+create policy "projects: owner all" on public.projects
+  for all to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+alter table public.documents
+  add column if not exists project_id uuid references public.projects(id) on delete set null,
+  add column if not exists key_sentence text check (key_sentence is null or char_length(key_sentence) <= 1000);
+create index if not exists documents_project_idx on public.documents (project_id);
+
+-- 문서를 다른 사람의 프로젝트에 넣지 못하게 프로젝트 소유도 확인
+drop policy if exists "documents: owner all" on public.documents;
+create policy "documents: owner all" on public.documents
+  for all to authenticated
+  using ((select auth.uid()) = user_id)
+  with check (
+    (select auth.uid()) = user_id
+    and (project_id is null or exists (
+      select 1 from public.projects p where p.id = project_id and p.user_id = (select auth.uid())))
+  );
+
+create table if not exists public.comments (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid not null references public.documents(id) on delete cascade,
+  page int not null,
+  x real not null,                        -- 핀 위치 (PDF 포인트, 좌상단 원점)
+  y real not null,
+  body text not null check (char_length(body) between 1 and 2000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists comments_document_idx on public.comments (document_id, page);
+alter table public.comments enable row level security;
+create policy "comments: owner all" on public.comments
+  for all to authenticated
+  using (exists (select 1 from public.documents d
+                 where d.id = document_id and d.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.documents d
+                      where d.id = document_id and d.user_id = (select auth.uid())));

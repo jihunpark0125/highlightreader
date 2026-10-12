@@ -7,7 +7,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import { SimpleTopbar } from "@/components/SimpleTopbar";
 import { startProcessing } from "@/lib/api";
 import { BUCKET, supabase } from "@/lib/supabase";
-import type { DocumentRow, HighlightRow } from "@/lib/types";
+import type { CommentRow, DocumentRow, HighlightRow } from "@/lib/types";
 import { useSession } from "@/lib/useSession";
 
 // pdf.js는 브라우저에서만 동작
@@ -19,6 +19,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const [doc, setDoc] = useState<DocumentRow | null | undefined>(undefined);
   const [file, setFile] = useState<Blob | null>(null);
   const [rows, setRows] = useState<HighlightRow[] | null>(null);
+  const [comments, setComments] = useState<CommentRow[] | null>(null);
   const [version, setVersion] = useState(0); // AI 하이라이트를 다시 만들면 증가
   const [error, setError] = useState<string | null>(null);
 
@@ -58,9 +59,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       });
     }
     setRows(null);
+    setComments(null);
     supabase.from("highlights").select("*").eq("document_id", id).then(({ data, error }) => {
       if (error) setError("하이라이트를 불러오지 못했어요.");
       else setRows((data as HighlightRow[]) ?? []);
+    });
+    supabase.from("comments").select("*").eq("document_id", id).order("created_at").then(({ data, error }) => {
+      if (error) setError("코멘트를 불러오지 못했어요.");
+      else setComments((data as CommentRow[]) ?? []);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
@@ -111,7 +117,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  if (!file || !rows) {
+  if (!file || !rows || !comments) {
     return (
       <StatusScreen title={doc.title.replace(/\.pdf$/i, "")}>
         <p className="lead">{error ?? "문서를 불러오는 중…"}</p>
@@ -125,6 +131,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       doc={doc}
       file={file}
       initialRows={rows}
+      initialComments={comments}
       onDocChange={(next) => setDoc(next)}
     />
   );

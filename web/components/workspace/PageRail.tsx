@@ -4,7 +4,7 @@ import { PanelLeftClose, Search, X } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Page } from "react-pdf";
-import type { HighlightGroup } from "@/lib/types";
+import type { CommentRow, HighlightGroup } from "@/lib/types";
 
 const THUMB_WIDTH = 97;
 
@@ -13,6 +13,7 @@ type Props = {
   numPages: number;
   sizeOf: (page: number) => [number, number];
   groups: HighlightGroup[];
+  comments: CommentRow[];
   currentPage: number;
   onJump: (page: number) => void;
   onClose: () => void;
@@ -20,7 +21,7 @@ type Props = {
 
 const normalize = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
-export default function PageRail({ pdf, numPages, sizeOf, groups, currentPage, onJump, onClose }: Props) {
+export default function PageRail({ pdf, numPages, sizeOf, groups, comments, currentPage, onJump, onClose }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [visible, setVisible] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5]));
@@ -128,6 +129,9 @@ export default function PageRail({ pdf, numPages, sizeOf, groups, currentPage, o
                     className="thumb-mark"
                     style={{ left: x0 * scale, top: y0 * scale, width: (x1 - x0) * scale, height: Math.max((y1 - y0) * scale, 2) }}
                   />
+                ))}
+                {comments.filter((c) => c.page === page).map((c) => (
+                  <span key={c.id} className="thumb-comment" style={{ left: c.x * scale, top: c.y * scale }} />
                 ))}
               </span>
             </button>

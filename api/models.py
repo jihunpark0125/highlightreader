@@ -76,3 +76,15 @@ class Highlight:
             category=data.get("category") or "",
             relevance=data.get("relevance"),
         )
+
+
+@dataclass
+class Comment:
+    page: int
+    x: float  # 핀 위치 (PDF 포인트, 좌상단 원점)
+    y: float
+    body: str
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Comment":
+        return cls(page=int(data["page"]), x=float(data["x"]), y=float(data["y"]), body=data.get("body", ""))

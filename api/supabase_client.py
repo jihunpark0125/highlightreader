@@ -75,6 +75,14 @@ class UserSupabase:
             timeout=TIMEOUT,
         )).json()
 
+    def list_comments(self, doc_id: str) -> list[dict]:
+        return self._check(requests.get(
+            f"{self.url}/rest/v1/comments",
+            params={"document_id": f"eq.{doc_id}", "select": "*", "order": "page,created_at"},
+            headers=self.headers,
+            timeout=TIMEOUT,
+        )).json()
+
     def replace_ai_highlights(self, doc_id: str, rows: list[dict]) -> None:
         self._check(requests.delete(
             f"{self.url}/rest/v1/highlights",
