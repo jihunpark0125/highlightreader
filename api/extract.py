@@ -167,8 +167,28 @@ def _continues(prev: _BlockInfo | None, cur: _BlockInfo) -> bool:
     return cur.page == prev.page + 1  # 다음 쪽
 
 
-def extract(pdf_bytes: bytes) -> ExtractedDocument:
+OCR_MIN_CHARS = 20  # 이보다 글자가 적은 쪽은 스캔 쪽으로 보고 OCR 결과를 쓴다 (web/lib/ocr.ts 와 같은 기준)
+
+
+def _page_words(page: fitz.Page, pno: int, ocr_pages: dict) -> list[tuple]:
+    """쪽의 단어 목록 (x0, y0, x1, y1, 글자, 블록, 줄, 번호). 글자 층이 없는 스캔 쪽은 브라우저 OCR 결과를 쓴다."""
+    words = page.get_text("words", sort=False)
+    if sum(len(w[4]) for w in words) >= OCR_MIN_CHARS:
+        return words
+    ocr_words = (ocr_pages.get(str(pno)) or {}).get("words") or []
+    if not ocr_words:
+        return words
+    return [
+        (float(x0), float(y0), float(x1), float(y1), str(text), int(block), int(line), i)
+        for i, (x0, y0, x1, y1, text, block, line) in enumerate(ocr_words)
+        if str(text).strip()
+    ]
+
+
+def extract(pdf_bytes: bytes, ocr: dict | None = None) -> ExtractedDocument:
+    """ocr: 브라우저에서 인식한 스캔 쪽 단어 {"pages": {"쪽번호": {"words": [[x0,y0,x1,y1,글자,블록,줄], ...]}}}"""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    ocr_pages = (ocr or {}).get("pages") or {}
     result = ExtractedDocument(
         page_count=doc.page_count,
         page_sizes=[(p.rect.width, p.rect.height) for p in doc],
@@ -202,7 +222,7 @@ def extract(pdf_bytes: bytes) -> ExtractedDocument:
     for pno, page in enumerate(doc):
         page_h = page.rect.height
         blocks: dict[int, list[Word]] = {}
-        for x0, y0, x1, y1, text, bno, lno, _wno in page.get_text("words", sort=False):
+        for x0, y0, x1, y1, text, bno, lno, _wno in _page_words(page, pno, ocr_pages):
             blocks.setdefault(bno, []).append(Word(pno, (x0, y0, x1, y1), bno, lno, text))
 
         captions: list[tuple[Rect, str]] = []

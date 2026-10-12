@@ -100,3 +100,59 @@ def test_export_with_comments_keeps_original_and_adds_notes():
                 notes.append((a.info["content"], page.rect.contains(a.rect.tl)))
     assert [n[0] for n in notes] == ["이 문장 다시 읽기", "범위 밖 좌표"]
     assert all(inside for _text, inside in notes)  # 범위 밖 좌표는 쪽 안으로 옮겨짐
+
+
+def _scanned_pdf() -> bytes:
+    """글자 층 없이 그림만 있는 쪽 (스캔본 흉내)."""
+    doc = fitz.open()
+    page = doc.new_page(width=518, height=703)
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 100, 136), False)
+    pix.set_rect(pix.irect, (250, 250, 245))
+    page.insert_image(page.rect, pixmap=pix)
+    return doc.tobytes()
+
+
+def _ocr_line(words, y, block, line, x=60):
+    out = []
+    for w in words:
+        width = 6 * len(w)
+        out.append([x, y, x + width, y + 10, w, block, line])
+        x += width + 4
+    return out
+
+
+SCAN_OCR = {
+    "version": 1,
+    "engine": "test",
+    "pages": {
+        "0": {
+            "words": (
+                _ocr_line(["Interrelationship", "between", "Serum", "LH", "and", "FSH"], 80, 0, 0)
+                + _ocr_line(["The", "accurate", "prediction", "of", "ovulation", "is", "important."], 200, 1, 1)
+                + _ocr_line(["Serum", "LH", "increased", "rapidly", "before", "ovulation."], 215, 1, 2)
+            )
+        }
+    },
+}
+
+
+def test_scanned_page_uses_ocr_words():
+    original = _scanned_pdf()
+    assert extract(original).candidates == []  # OCR 없으면 글자 없음
+    doc = extract(original, SCAN_OCR)
+    texts = [s.text for s in doc.candidates]
+    assert "The accurate prediction of ovulation is important." in texts
+    assert "Serum LH increased rapidly before ovulation." in texts
+    assert doc.figures == []  # 쪽 전체를 덮는 스캔 그림은 그림 후보가 아님
+
+    highlights = select_highlights(doc, offline=True)
+    exported = export_pdf(original, highlights)
+    assert exported.startswith(original)
+    annot_rects = [a.rect for p in fitz.open(stream=exported) for a in p.annots()]
+    assert any(abs(r.y0 - 200) < 3 for r in annot_rects + [fitz.Rect(h.rects[0]) for h in highlights])
+
+
+def test_ocr_ignored_on_pages_with_text():
+    original = make_english_paper()
+    fake = {"pages": {"0": {"words": [[10, 10, 50, 20, "GARBAGE", 0, 0]] * 10}}}
+    assert not any("GARBAGE" in s.text for s in extract(original, fake).sentences)

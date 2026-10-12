@@ -67,6 +67,17 @@ class UserSupabase:
             timeout=TIMEOUT * 3,
         )).content
 
+    def download_optional(self, bucket: str, path: str) -> bytes | None:
+        """파일이 없으면 None (OCR 결과처럼 있을 수도 없을 수도 있는 파일용)."""
+        response = requests.get(
+            f"{self.url}/storage/v1/object/{bucket}/{quote(path)}",
+            headers=self.headers,
+            timeout=TIMEOUT,
+        )
+        if response.status_code in (400, 404):
+            return None
+        return self._check(response).content
+
     def list_highlights(self, doc_id: str) -> list[dict]:
         return self._check(requests.get(
             f"{self.url}/rest/v1/highlights",

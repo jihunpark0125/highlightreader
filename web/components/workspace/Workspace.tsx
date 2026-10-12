@@ -7,18 +7,18 @@ import {
 import Link from "next/link";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Document, pdfjs } from "react-pdf";
+import { Document } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import { Brand } from "@/components/Brand";
 import { downloadHighlighted, startProcessing } from "@/lib/api";
+import type { OcrResult } from "@/lib/ocr";
+import "@/lib/pdfjs";
 import { supabase } from "@/lib/supabase";
 import { groupHighlights, type CommentRow, type DocumentRow, type HighlightGroup, type HighlightRow, type ProjectRow } from "@/lib/types";
 import CommentPin from "./CommentPin";
 import FinalizeDialog, { type FinalizeChoice } from "./FinalizeDialog";
 import PageRail from "./PageRail";
 import ReaderPages, { type EditMode, type NewHighlight } from "./ReaderPages";
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
 const DEFAULT_SIZE: [number, number] = [595, 842];
 const MIN_ZOOM = 0.5, MAX_ZOOM = 2.5;
@@ -34,10 +34,11 @@ type Props = {
   file: Blob;
   initialRows: HighlightRow[];
   initialComments: CommentRow[];
+  ocr: OcrResult | null;
   onDocChange: (doc: DocumentRow) => void;
 };
 
-export default function Workspace({ doc, file, initialRows, initialComments, onDocChange }: Props) {
+export default function Workspace({ doc, file, initialRows, initialComments, ocr, onDocChange }: Props) {
   const [rows, setRows] = useState<HighlightRow[]>(initialRows);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -393,6 +394,7 @@ export default function Workspace({ doc, file, initialRows, initialComments, onD
           sizeOf={sizeOf}
           groups={activeGroups}
           comments={comments}
+          ocrPages={ocr?.pages ?? null}
           currentPage={currentPage}
           onJump={jumpTo}
           onClose={() => setRailOpen(false)}
@@ -477,6 +479,7 @@ export default function Workspace({ doc, file, initialRows, initialComments, onD
               onDeactivate={(key) => { const g = groups.find((x) => x.key === key); if (g) setGroupActive(g, false); }}
               onPlaceComment={placeComment}
               renderPageExtras={renderPins}
+              ocrPages={ocr?.pages ?? null}
             />
           </div>
         </section>

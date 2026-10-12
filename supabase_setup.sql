@@ -141,3 +141,17 @@ create policy "comments: owner all" on public.comments
                  where d.id = document_id and d.user_id = (select auth.uid())))
   with check (exists (select 1 from public.documents d
                       where d.id = document_id and d.user_id = (select auth.uid())));
+
+-- 5차: 스캔본 글자 인식 결과 (브라우저 OCR) — ocr/{user_id}/{document_id}.json
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('ocr', 'ocr', false, 5242880, array['application/json'])
+on conflict (id) do nothing;
+create policy "ocr: owner read" on storage.objects for select to authenticated
+  using (bucket_id = 'ocr' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "ocr: owner insert" on storage.objects for insert to authenticated
+  with check (bucket_id = 'ocr' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "ocr: owner update" on storage.objects for update to authenticated
+  using (bucket_id = 'ocr' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'ocr' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "ocr: owner delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'ocr' and (storage.foldername(name))[1] = (select auth.uid())::text);

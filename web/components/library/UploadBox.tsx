@@ -3,7 +3,6 @@
 import { FileUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { startProcessing } from "@/lib/api";
 import { BUCKET, supabase } from "@/lib/supabase";
 import type { ProjectRow } from "@/lib/types";
 
@@ -47,7 +46,7 @@ export default function UploadBox({ userId, fixedProjectId, projects }: Props) {
         project_id: fixedProjectId ?? (projectId || null),
       });
       if (ins.error) throw new Error(`저장 실패: ${ins.error.message}`);
-      await startProcessing(id);
+      // 분석 시작은 문서 화면이 맡는다 (스캔본이면 브라우저에서 글자 인식을 먼저 한다)
       router.push(`/doc/${id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

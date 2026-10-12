@@ -343,3 +343,11 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 3px; background: var(--amber-faint);
   color: rgb(117, 93, 14); font-family: var(--sans); font-size: 10px; font-style: normal; font-weight: 600;
 }
+
+/* 스캔 쪽의 보이지 않는 인식 글자 층 (드래그 선택용) */
+.ocr-layer { position: absolute; inset: 0; z-index: 2; overflow: hidden; line-height: 1; }
+.ocr-layer span {
+  position: absolute; color: transparent; white-space: pre; transform-origin: 0 0; cursor: text;
+  font-family: sans-serif;
+}
+.ocr-layer span::selection { background: rgba(94, 120, 105, .3); }

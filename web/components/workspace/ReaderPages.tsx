@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Page } from "react-pdf";
+import type { OcrResult } from "@/lib/ocr";
 import type { HighlightGroup, HighlightRow, Rect } from "@/lib/types";
+import OcrTextLayer from "./OcrTextLayer";
 
 export type NewHighlight = Pick<HighlightRow, "page" | "kind" | "rects" | "text">;
 export type EditMode = "off" | "text" | "area" | "comment";
@@ -23,6 +25,8 @@ type Props = {
   onPlaceComment: (page: number, x: number, y: number) => void;
   /** 쪽마다 덧붙여 그릴 것 (코멘트 핀) — 화면 배율이 반영된 좌표로 그려야 한다 */
   renderPageExtras: (page: number) => React.ReactNode;
+  /** 스캔 쪽의 인식 글자 (있으면 투명 글자 층으로 깔아 드래그 선택 가능) */
+  ocrPages: OcrResult["pages"] | null;
 };
 
 /** 화면 좌표 사각형들을 PDF 좌표로 바꾸고, 같은 줄에 붙어 있는 조각은 하나로 합친다. */
@@ -56,7 +60,7 @@ function toLineRects(client: DOMRect[], page: DOMRect, scale: number): Rect[] {
 }
 
 export default function ReaderPages(props: Props) {
-  const { numPages, sizeOf, zoom, groups, selectedKey, mode, editable, pageRefs, scrollRoot, onSelect, onAdd, onDeactivate, onPlaceComment, renderPageExtras } = props;
+  const { numPages, sizeOf, zoom, groups, selectedKey, mode, editable, pageRefs, scrollRoot, onSelect, onAdd, onDeactivate, onPlaceComment, renderPageExtras, ocrPages } = props;
   const [visible, setVisible] = useState<Set<number>>(new Set([0, 1, 2]));
   const [draft, setDraft] = useState<{ page: number; start: [number, number]; end: [number, number] } | null>(null);
   const draftRef = useRef(draft);
@@ -173,6 +177,7 @@ export default function ReaderPages(props: Props) {
                   renderTextLayer
                   loading={null}
                 />
+                {ocrPages?.[String(page)] && <OcrTextLayer words={ocrPages[String(page)].words} zoom={zoom} />}
                 {/* 하이라이트 레이어: 원본 위에 덧칠만 하고, 글자 선택은 그 위 텍스트 레이어가 받는다 */}
                 <div className="pointer-events-none absolute inset-0 z-[1]">
                   {items.map(({ group, row }) =>

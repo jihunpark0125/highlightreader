@@ -4,6 +4,7 @@ import { PanelLeftClose, Search, X } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Page } from "react-pdf";
+import type { OcrResult } from "@/lib/ocr";
 import type { CommentRow, HighlightGroup } from "@/lib/types";
 
 const THUMB_WIDTH = 97;
@@ -14,6 +15,7 @@ type Props = {
   sizeOf: (page: number) => [number, number];
   groups: HighlightGroup[];
   comments: CommentRow[];
+  ocrPages: OcrResult["pages"] | null;
   currentPage: number;
   onJump: (page: number) => void;
   onClose: () => void;
@@ -21,7 +23,7 @@ type Props = {
 
 const normalize = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
-export default function PageRail({ pdf, numPages, sizeOf, groups, comments, currentPage, onJump, onClose }: Props) {
+export default function PageRail({ pdf, numPages, sizeOf, groups, comments, ocrPages, currentPage, onJump, onClose }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [visible, setVisible] = useState<Set<number>>(new Set([0, 1, 2, 3, 4, 5]));
@@ -63,7 +65,8 @@ export default function PageRail({ pdf, numPages, sizeOf, groups, comments, curr
         let text = textCache.current.get(i);
         if (text === undefined) {
           const content = await (await pdf.getPage(i + 1)).getTextContent();
-          text = normalize(content.items.map((it) => ("str" in it ? it.str : "")).join(""));
+          const ocrWords = ocrPages?.[String(i)]?.words ?? [];
+          text = normalize(content.items.map((it) => ("str" in it ? it.str : "")).join("") + ocrWords.map((w) => w[4]).join(""));
           textCache.current.set(i, text);
         }
         if (text.includes(q)) found.push(i);
@@ -71,7 +74,7 @@ export default function PageRail({ pdf, numPages, sizeOf, groups, comments, curr
       if (!cancelled) setMatches(found);
     }, 250);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [query, pdf, numPages]);
+  }, [query, pdf, numPages, ocrPages]);
 
   const marksByPage = useMemo(() => {
     const map = new Map<number, [number, number, number, number][]>();

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -28,6 +29,7 @@ from .supabase_client import SupabaseError, UserSupabase
 load_dotenv()
 
 BUCKET = "originals"
+OCR_BUCKET = "ocr"  # 브라우저에서 인식한 스캔 쪽 글자: {user_id}/{document_id}.json
 MAX_PAGES = int(os.environ.get("MAX_PAGES") or "300")
 STALE_AFTER = timedelta(minutes=5)
 
@@ -64,11 +66,12 @@ def _process(client: UserSupabase, doc: dict, ratio: float) -> None:
     doc_id = doc["id"]
     try:
         original = client.download(BUCKET, doc["storage_path"])
-        extracted = extract(original)
+        ocr_raw = client.download_optional(OCR_BUCKET, f"{doc['user_id']}/{doc_id}.json")
+        extracted = extract(original, json.loads(ocr_raw) if ocr_raw else None)
         if extracted.page_count > MAX_PAGES:
             raise ValueError(f"{MAX_PAGES}쪽을 넘는 문서는 아직 지원하지 않습니다.")
         if not extracted.candidates:
-            raise ValueError("텍스트를 찾지 못했습니다. 스캔본(이미지) PDF는 아직 지원하지 않습니다.")
+            raise ValueError("글자를 찾거나 인식하지 못했어요. 글자가 너무 흐리거나 그림만 있는 PDF일 수 있어요.")
         client.update_document(doc_id, {
             "page_count": extracted.page_count,
             "page_sizes": [list(s) for s in extracted.page_sizes],
