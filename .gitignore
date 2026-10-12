@@ -1,0 +1,16 @@
+# 비밀 값
+.env
+.env.*
+!.env.example
+web/.env.local
+
+# 빌드·캐시
+__pycache__/
+*.py[cod]
+.pytest_cache/
+web/node_modules/
+web/.next/
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
+.DS_Store
+!.env.local.example

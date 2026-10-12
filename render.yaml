@@ -1,0 +1,23 @@
+# Render 블루프린트: AI 서버(FastAPI)
+# Render 대시보드 → New → Blueprint → 이 저장소 선택. 비밀 값(sync: false)은 처음 만들 때 입력 창이 뜹니다.
+services:
+  - type: web
+    name: luma-api
+    runtime: python
+    plan: free            # 항상 켜 두려면 starter($7/월)로 변경
+    region: singapore     # 한국과 가장 가까운 지역
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: https://bticgwgqrdklkchovvrm.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_c04DHeKYbMF7DQKK9b4_Lw_ehpFYSdQ
+      - key: WEB_ORIGINS
+        sync: false       # Vercel 주소 (예: https://luma-reader.vercel.app)
